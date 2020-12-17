@@ -37,7 +37,7 @@ class App(object):
             if flight_date is None:
                 cur.execute("SELECT id FROM Flight")
             else:
-                cur.execute("SELECT id FROM Flight WHERE date = DATE({flight_date})")# поправио дату
+                cur.execute("SELECT id FROM Flight WHERE date = DATE({flight_date})")# поправил дату
             flight_ids = [row[0] for row in cur.fetchall()]
 
         # Now let's check if we have some cached data, this will speed up performance, kek
@@ -79,21 +79,18 @@ class App(object):
     @cherrypy.expose
     def flights(self, flight_date=None):
         # Let's cache the flights we need
-        # проверим, что дата имеет форма число-число-число, что конечно не совсем верно
+        # проверим, что дата имеет нужный формат
         if flight_date:
             components = flight_date.split('-')
             for c in components:
                 if (not c.isdigit()):
-                    return 'date is invalid format'
-        if len(components) != 3:
-            return 'date is invalid format:  year-month-day'
-        for c in components:
-            if (not c.isdigit()):
-                return 'date is invalid format:  year-month-day'
-        if (int(components[1]) < 1 or int(components[1]) > 12):
-            return 'month have to be in range 1-12'
-        if (int(components[2]) < 1 or int(components[2]) > 31):
-            return 'day have to be in range 1-31'
+                    return 'date is invalid format, need: year-month-day'
+            if len(components) != 3:
+                return 'date is invalid format, need: year-month-day'
+            if (int(components[1]) < 1 or int(components[1]) > 12):
+                return 'month have to be in range 1-12'
+            if (int(components[2]) < 1 or int(components[2]) > 31):
+                return 'day have to be in range 1-31'
         # по-хорошему надо бы проверить каждый иесяц по отдельности, но не сейчас
 
         flight_ids = self.cache_flights(flight_date)
@@ -141,13 +138,13 @@ class App(object):
         if flight_date is None or interval is None:
             return "Please specify flight_date and interval arguments, like this: /delay_flights?flight_date=2084-06-12&interval=1week"
         
-        # проверим, что дата имеет форма число-число-число, что конечно не совсем верно
+        # проверим, что дата имеет нужный формат
         components = flight_date.split('-')
         if len(components) != 3:
-            return 'date is invalid format:  year-month-day'
+            return 'date is invalid format, need:  year-month-day'
         for c in components:
             if (not c.isdigit()):
-                return 'date is invalid format:  year-month-day'
+                return 'date is invalid format, need:  year-month-day'
         if (int(components[1]) < 1 or int(components[1]) > 12):
             return 'month have to be in range 1-12'
         if (int(components[2]) < 1 or int(components[2]) > 31):
