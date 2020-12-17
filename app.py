@@ -100,7 +100,7 @@ class App(object):
             cur = db.cursor()
             for id in flight_ids:
                 cur.execute("UPDATE Flight SET date=date + interval %s WHERE id=%s", (interval, id))
-            db.commit()
+                db.commit()
 
     # Удаляет планету с указанным идентификатором.
     # Пример: /delete_planet?planet_id=1
