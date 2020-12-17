@@ -7,6 +7,7 @@ import psycopg2 as pg_driver
 from playhouse.pool import PooledPostgresqlDatabase
 
 import logging
+
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
@@ -18,8 +19,11 @@ pg_pool = pool.SimpleConnectionPool(
 
 def getconn():
     return pg_pool.getconn()
-    #return pg_driver.connect(user=args().pg_user, password=args().pg_password, host=args().pg_host, port=args().pg_port)
+    # return pg_driver.connect(user=args().pg_user, password=args().pg_password, host=args().pg_host, port=args().pg_port)
 
+
+def putconn(connection):
+    pg_pool.putconn(connection)
 
 
 class LoggingDatabase(PooledPostgresqlDatabase):
