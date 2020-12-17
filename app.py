@@ -9,7 +9,7 @@ from model import *
 
 @cherrypy.expose
 class App(object):
-    flight_cache = ...  # type: Dict[int, FlightEntity]
+    #flight_cache = ...  # type: Dict[int, FlightEntity]
 
     def __init__(self):
         self.flight_cache = dict()
@@ -31,23 +31,29 @@ class App(object):
         flight_ids = []  # type: List[int]
 
         # Just get all needed flight identifiers
-        with getconn() as db:
-            cur = db.cursor()
+        #with getconn() as db: #плохо использовать конструкцию with, так как сессия не возвращается в пулл сессий
+        db = getconn()
+        cur = db.cursor()
+        try:
             if flight_date is None:
                 cur.execute("SELECT id FROM Flight")
             else:
                 cur.execute("SELECT id FROM Flight WHERE date = %s", (flight_date,))
             flight_ids = [row[0] for row in cur.fetchall()]
+        finally:
+            db.close()
 
         # Now let's check if we have some cached data, this will speed up performance, kek
         # Voila, now let's make sure all the flights we need are cached to boost performance.
         # Stupid database...
+        flight = FlightEntity.select().join(PlanetEntity)
         for flight_id in flight_ids:
             if not flight_id in self.flight_cache:
                 # OMG, cache miss! Let's fetch data
-                flight = FlightEntity.select().join(PlanetEntity).where(FlightEntity.id == flight_id).get()
-                if flight is not None:
-                    self.flight_cache[flight_id] = flight
+                #получается для каждого полета который еще не лежит в кеше будем все время делать join, а затем фильтрацию
+                cur_flight = flight.where(FlightEntity.id == flight_id).execute() #get возвращает скаляр
+                if cur_flight is not None:
+                    self.flight_cache[flight_id] = cur_flight
         return flight_ids
 
     # Отображает таблицу с полетами в указанную дату или со всеми полетами,
@@ -105,10 +111,17 @@ class App(object):
         flight_ids = self.cache_flights(flight_date)
 
         # Update flights, reuse connections 'cause 'tis faster
-        with getconn() as db:
-            cur = db.cursor()
+        #with getconn() as db: такая же проблема
+        db = getconn()
+        cur = db.cursor()
+        try:
             for id in flight_ids:
+                #плохо что тут делает много запросов к одной таблице
                 cur.execute("UPDATE Flight SET date=date + interval %s WHERE id=%s", (interval, id))
+            # нужно сохранить изменение
+            db.commit()
+        finally:
+            db.close()
 
     # Удаляет планету с указанным идентификатором.
     # Пример: /delete_planet?planet_id=1
@@ -119,7 +132,15 @@ class App(object):
         db = getconn()
         cur = db.cursor()
         try:
-            cur.execute("DELETE FROM Planet WHERE id = %s", (planet_id,))
+            #проверить есть планета с данным id
+            cur.execute("SELECT * FROM Planet WHERE id = %s", (planet_id,))
+            #но сначала надо удалить все записи из таблиц Price и Flight,которые ссылаются на эту планету
+            if cur.fetchone() is not None:
+                cur.execute("DELETE FROM Price WHERE planet_id = %s", (planet_id,))
+                cur.execute("DELETE FROM Flight WHERE planet_id = %s", (planet_id,))
+                cur.execute("DELETE FROM Planet WHERE id = %s", (planet_id,))
+            #нужно сохранить изменение
+            db.commit()
         finally:
             db.close()
 

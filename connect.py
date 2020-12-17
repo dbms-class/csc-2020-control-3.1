@@ -20,8 +20,6 @@ def getconn():
     return pg_pool.getconn()
     #return pg_driver.connect(user=args().pg_user, password=args().pg_password, host=args().pg_host, port=args().pg_port)
 
-
-
 class LoggingDatabase(PooledPostgresqlDatabase):
     def __init__(self, args):
         super(LoggingDatabase, self).__init__(
