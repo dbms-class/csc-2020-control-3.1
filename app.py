@@ -87,8 +87,7 @@ class App(object):
             if (int(components[2]) < 1 or int(components[2]) > 31):
                 return 'day have to be in range 1-31'
         # по-хорошему надо бы проверить каждый иесяц по отдельности, но не сейчас
-        
-        self.flight_cache = {} # наверное за другие дни надо убрать
+
         flight_ids = self.cache_flights(flight_date)
 
 
