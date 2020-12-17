@@ -59,7 +59,7 @@ class App(object):
             if flight_date is None:
                 cur.execute("SELECT id FROM Flight")
             else:
-                cur.execute("SELECT id FROM Flight WHERE date = {flight_date}")
+                cur.execute("SELECT id FROM Flight WHERE date = DATE({flight_date})")
             flight_ids = [row[0] for row in cur.fetchall()]
 
             return flight_ids
