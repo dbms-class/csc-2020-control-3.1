@@ -2,7 +2,7 @@
 # В этом файле реализованы Data Access Objects в виде классов Peewee ORM
 from peewee import *
 
-from connect import getconn
+from connect import getconn, pg_pool
 from connect import LoggingDatabase
 from args import *
 
@@ -41,6 +41,13 @@ class PriceEntity(Model):
         database = db
         db_table = "price"
 
+def txn(work):
+    db = getconn()
+    try:
+        with db.atomic() as txn:
+            return work(txn)
+    finally:
+        pg_pool.putconn(db)
 
 class TicketEntity(Model):
     id = IntegerField()
@@ -59,9 +66,15 @@ class TicketEntity(Model):
 
     # Устанавливает размер скидки на билет
     def set_discount(self, discount):
-        with getconn() as db:
-            cur = db.cursor()
-            cur.execute("UPDATE FlightTicket SET discount=%s WHERE id=%s", (discount, self.id))
+        # лучше использовать один db на все update
+        # with getconn() as db:
+        #    cur = db.cursor()
+        #    cur.execute("UPDATE FlightTicket SET discount=%s WHERE id=%s", (discount, self.id))
+        return txn(lambda db: self.set_discount_work(db, discount))
+
+    def set_discount_work(self, db, discount):
+        cur = db.cursor()
+        cur.execute("UPDATE FlightTicket SET discount=%s WHERE id=%s", (discount, self.id))
 
 
 class BookingEntity(Model):

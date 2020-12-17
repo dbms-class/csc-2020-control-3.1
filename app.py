@@ -39,16 +39,21 @@ class App(object):
                 cur.execute("SELECT id FROM Flight WHERE date = %s", (flight_date,))
             flight_ids = [row[0] for row in cur.fetchall()]
 
-        # Now let's check if we have some cached data, this will speed up performance, kek
-        # Voila, now let's make sure all the flights we need are cached to boost performance.
-        # Stupid database...
-        for flight_id in flight_ids:
-            if not flight_id in self.flight_cache:
-                # OMG, cache miss! Let's fetch data
-                flight = FlightEntity.select().join(PlanetEntity).where(FlightEntity.id == flight_id).get()
-                if flight is not None:
-                    self.flight_cache[flight_id] = flight
-        return flight_ids
+            # а если что-нибудь сломалось и flight_ids=[]? Лучше и весь следующий блок делать внутри with
+
+            # Now let's check if we have some cached data, this will speed up performance, kek
+            # Voila, now let's make sure all the flights we need are cached to boost performance.
+            # Stupid database...
+            q = FlightEntity.select().join(PlanetEntity)
+            for flight_id in flight_ids:
+                if not flight_id in self.flight_cache:
+                    # OMG, cache miss! Let's fetch data
+                    # Здесь мы много раз будем обращаться к БД, чтобы получить каждый полет
+                    # flight = FlightEntity.select().join(PlanetEntity).where(FlightEntity.id == flight_id).get()
+                    flight = q.where(FlightEntity.id == flight_id).get()
+                    if flight is not None:
+                        self.flight_cache[flight_id] = flight
+            return flight_ids
 
     # Отображает таблицу с полетами в указанную дату или со всеми полетами,
     # если дата не указана
@@ -105,6 +110,9 @@ class App(object):
         flight_ids = self.cache_flights(flight_date)
 
         # Update flights, reuse connections 'cause 'tis faster
+        # кажется, что создавать каждый раз новое соединение не очень хорошая идея,
+        # т.к. мы можем одновременно начать что-то менять и все сломается.
+        # лучше принимать один db, сделать в model.py метод set_date
         with getconn() as db:
             cur = db.cursor()
             for id in flight_ids:
@@ -116,12 +124,18 @@ class App(object):
     def delete_planet(self, planet_id=None):
         if planet_id is None:
             return "Please specify planet_id, like this: /delete_planet?planet_id=1"
-        db = getconn()
-        cur = db.cursor()
-        try:
+
+        #db = getconn()
+        # это стоит делать в блоке try или переписать с with, как в delay_flights
+        #cur = db.cursor()
+        #try:
+        #    cur.execute("DELETE FROM Planet WHERE id = %s", (planet_id,))
+        #finally:
+        # но стоит же отдать обратно в пул, а не закрыть...
+        #    db.close()
+        with getconn() as db:
+            cur = db.cursor()
             cur.execute("DELETE FROM Planet WHERE id = %s", (planet_id,))
-        finally:
-            db.close()
 
 
 if __name__ == '__main__':
