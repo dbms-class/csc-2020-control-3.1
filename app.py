@@ -5,7 +5,10 @@ from typing import List, Dict
 ## Веб сервер
 import cherrypy
 from connect import getconn
+from connect import connection_factory
+from connect import parse_cmd_line
 from model import *
+
 
 @cherrypy.expose
 class App(object):
@@ -31,23 +34,23 @@ class App(object):
         flight_ids = []  # type: List[int]
 
         # Just get all needed flight identifiers
-        with getconn() as db:
+        db = connection_factory.getconn()
+        try:
             cur = db.cursor()
             if flight_date is None:
                 cur.execute("SELECT id FROM Flight")
             else:
                 cur.execute("SELECT id FROM Flight WHERE date = %s", (flight_date,))
             flight_ids = [row[0] for row in cur.fetchall()]
-
-        # Now let's check if we have some cached data, this will speed up performance, kek
-        # Voila, now let's make sure all the flights we need are cached to boost performance.
-        # Stupid database...
+        finally:
+            connection_factory.putconn(db)
+        flight = FlightEntity.select().join(PlanetEntity)
         for flight_id in flight_ids:
             if not flight_id in self.flight_cache:
-                # OMG, cache miss! Let's fetch data
-                flight = FlightEntity.select().join(PlanetEntity).where(FlightEntity.id == flight_id).get()
-                if flight is not None:
-                    self.flight_cache[flight_id] = flight
+                cur_flight = flight.where(FlightEntity.id == flight_id).get()
+
+                if cur_flight is not None:
+                    self.flight_cache[flight_id] = cur_flight
         return flight_ids
 
     # Отображает таблицу с полетами в указанную дату или со всеми полетами,
@@ -58,36 +61,37 @@ class App(object):
     @cherrypy.expose
     def flights(self, flight_date=None):
         # Let's cache the flights we need
+        # db = getconn()
         flight_ids = self.cache_flights(flight_date)
-
-        # Okeyla, now let's format the result HTML
+        # db.close()
+        # # Okeyla, now let's format the result HTML
         result_text = """
-        <html>
-        <body>
-        <style>
-    table > * {
-        text-align: left;
-    }
-    td {
-        padding: 5px;
-    }
-    table { 
-        border-spacing: 5px; 
-        border: solid grey 1px;
-        text-align: left;
-    }
-        </style>
-        <table>
-            <tr><th>Flight ID</th><th>Date</th><th>Planet</th><th>Planet ID</th></tr>
-        """
+            <html>
+            <body>
+            <style>
+        table > * {
+            text-align: left;
+        }
+        td {
+            padding: 5px;
+        }
+        table {
+            border-spacing: 5px;
+            border: solid grey 1px;
+            text-align: left;
+        }
+            </style>
+            <table>
+                <tr><th>Flight ID</th><th>Date</th><th>Planet</th><th>Planet ID</th></tr>
+            """
         for flight_id in flight_ids:
             flight = self.flight_cache[flight_id]
             result_text += f'<tr><td>{flight.id}</td><td>{flight.date}</td><td>{flight.planet.name}</td><td>{flight.planet.id}</td></tr>'
         result_text += """
-        </table>
-        </body>
-        </html>
-        """
+            </table>
+            </body>
+            </html>
+            """
         cherrypy.response.headers['Content-Type'] = 'text/html; charset=utf-8'
         return result_text
 
@@ -105,10 +109,14 @@ class App(object):
         flight_ids = self.cache_flights(flight_date)
 
         # Update flights, reuse connections 'cause 'tis faster
-        with getconn() as db:
+        db = connection_factory.getconn()
+        try:
             cur = db.cursor()
             for id in flight_ids:
                 cur.execute("UPDATE Flight SET date=date + interval %s WHERE id=%s", (interval, id))
+            db.commit()
+        finally:
+            connection_factory.putconn(db)
 
     # Удаляет планету с указанным идентификатором.
     # Пример: /delete_planet?planet_id=1
@@ -116,12 +124,15 @@ class App(object):
     def delete_planet(self, planet_id=None):
         if planet_id is None:
             return "Please specify planet_id, like this: /delete_planet?planet_id=1"
-        db = getconn()
+        db = connection_factory.getconn()
         cur = db.cursor()
         try:
+            cur.execute("DELETE FROM Flight WHERE planet_id = %s", (planet_id,))
+            cur.execute("DELETE FROM Price WHERE planet_id = %s", (planet_id,))
             cur.execute("DELETE FROM Planet WHERE id = %s", (planet_id,))
+            db.commit()
         finally:
-            db.close()
+            connection_factory.putconn(db)
 
 
 if __name__ == '__main__':
