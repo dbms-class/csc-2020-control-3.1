@@ -4,7 +4,7 @@ from typing import List, Dict
 
 ## Веб сервер
 import cherrypy
-from connect import getconn
+from connect import connection_factory
 from model import *
 
 @cherrypy.expose
@@ -31,24 +31,17 @@ class App(object):
         flight_ids = []  # type: List[int]
 
         # Just get all needed flight identifiers
-        with getconn() as db:
-            cur = db.cursor()
-            if flight_date is None:
-                cur.execute("SELECT id FROM Flight")
-            else:
-                cur.execute("SELECT id FROM Flight WHERE date = %s", (flight_date,))
-            flight_ids = [row[0] for row in cur.fetchall()]
+        with connection_factory.conn() as db:
+            flight = FlightEntity.select().join(PlanetEntity)
 
-        # Now let's check if we have some cached data, this will speed up performance, kek
-        # Voila, now let's make sure all the flights we need are cached to boost performance.
-        # Stupid database...
-        for flight_id in flight_ids:
-            if not flight_id in self.flight_cache:
-                # OMG, cache miss! Let's fetch data
-                flight = FlightEntity.select().join(PlanetEntity).where(FlightEntity.id == flight_id).get()
-                if flight is not None:
-                    self.flight_cache[flight_id] = flight
-        return flight_ids
+            if flight_date is not None:
+                flight = flight.where(FlightEntity.date == flight_date)
+
+            flight_ids = [row.id for row in flight]
+            for row in flight:
+                self.flight_cache[row.id] = row
+
+            return flight_ids
 
     # Отображает таблицу с полетами в указанную дату или со всеми полетами,
     # если дата не указана
@@ -98,30 +91,25 @@ class App(object):
     #
     # пример: /delay_flights?flight_date=2084-06-12&interval=1day
     @cherrypy.expose
-    def delay_flights(self, flight_date=None, interval=None):
-        if flight_date is None or interval is None:
-            return "Please specify flight_date and interval arguments, like this: /delay_flights?flight_date=2084-06-12&interval=1week"
+    def delay_flights(self, flight_date, interval):
         # Make sure flights are cached
         flight_ids = self.cache_flights(flight_date)
 
         # Update flights, reuse connections 'cause 'tis faster
-        with getconn() as db:
+        with connection_factory.conn() as db:
             cur = db.cursor()
             for id in flight_ids:
                 cur.execute("UPDATE Flight SET date=date + interval %s WHERE id=%s", (interval, id))
+                db.commit()
 
     # Удаляет планету с указанным идентификатором.
     # Пример: /delete_planet?planet_id=1
     @cherrypy.expose
-    def delete_planet(self, planet_id=None):
-        if planet_id is None:
-            return "Please specify planet_id, like this: /delete_planet?planet_id=1"
-        db = getconn()
-        cur = db.cursor()
-        try:
+    def delete_planet(self, planet_id):
+        with connection_factory.conn() as db:
+            cur = db.cursor()
             cur.execute("DELETE FROM Planet WHERE id = %s", (planet_id,))
-        finally:
-            db.close()
+            db.commit()
 
 
 if __name__ == '__main__':
