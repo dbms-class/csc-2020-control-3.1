@@ -171,12 +171,12 @@ class App(object):
     def delete_planet(self, planet_id=None): 
         if planet_id is None:
             return "Please specify planet_id, like this: /delete_planet?planet_id=1"
-        if (not planet_id.isdigit() and planet_id[0] != '-'): # опять нет проверки на число
+        if (not planet_id.isdigit() or int(planet_id) < 0): # опять нет проверки на число
             return "Please write planet_id as digit positive number"
         db = getconn()
         try:
             cur = db.cursor()
-            cur.execute("DELETE FROM Planet WHERE id = %s", (planet_id,))
+            cur.execute("DELETE FROM Planet WHERE id = {int(planet_id)}")
             db.commit() # не было коммита в бд
         finally:
             db.close()
