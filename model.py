@@ -6,8 +6,8 @@ from connect import getconn
 from connect import LoggingDatabase
 from args import *
 
-#db = PostgresqlDatabase(args().pg_database, user=args().pg_user, host=args().pg_host, password=args().pg_password)
-db = LoggingDatabase(args())
+db = PostgresqlDatabase(args().pg_database, user=args().pg_user, host=args().pg_host, password=args().pg_password)
+#db = LoggingDatabase(args())
 
 
 # Классы ORM модели.
