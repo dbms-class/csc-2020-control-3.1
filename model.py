@@ -25,7 +25,8 @@ class FlightEntity(Model):
     id = IntegerField()
     date = DateField()
     available_seats = IntegerField()
-    planet = ForeignKeyField(PlanetEntity, related_name='flights')
+    # 6
+    planet = ForeignKeyField(PlanetEntity, backref='flights')
 
     class Meta:
         database = db
