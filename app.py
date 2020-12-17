@@ -4,7 +4,7 @@ from typing import List, Dict
 
 ## Веб сервер
 import cherrypy
-from connect import getconn
+from connect import getconn, putconn
 from model import *
 
 @cherrypy.expose
@@ -31,23 +31,31 @@ class App(object):
         flight_ids = []  # type: List[int]
 
         # Just get all needed flight identifiers
-        with getconn() as db:
+        db = getconn()
+        #with getconn() as db:
+        try:
             cur = db.cursor()
             if flight_date is None:
                 cur.execute("SELECT id FROM Flight")
             else:
                 cur.execute("SELECT id FROM Flight WHERE date = %s", (flight_date,))
             flight_ids = [row[0] for row in cur.fetchall()]
-
+        finally:
+            putconn(db)
         # Now let's check if we have some cached data, this will speed up performance, kek
         # Voila, now let's make sure all the flights we need are cached to boost performance.
         # Stupid database...
-        for flight_id in flight_ids:
-            if not flight_id in self.flight_cache:
-                # OMG, cache miss! Let's fetch data
-                flight = FlightEntity.select().join(PlanetEntity).where(FlightEntity.id == flight_id).get()
-                if flight is not None:
-                    self.flight_cache[flight_id] = flight
+        # for flight_id in flight_ids:
+        #     if flight_id not in self.flight_cache:
+        #         # OMG, cache miss! Let's fetch data
+        #         flight = FlightEntity.select().join(PlanetEntity).where(FlightEntity.id == flight_id).get()
+        #         if flight is not None:
+        #             self.flight_cache[flight_id] = flight
+
+        flight = FlightEntity.select().join(PlanetEntity)
+        for fe in flight:
+            if fe.__dict__['__data__']['id'] not in self.flight_cache:
+                self.flight_cache[fe.__dict__['__data__']['id']] = fe
         return flight_ids
 
     # Отображает таблицу с полетами в указанную дату или со всеми полетами,
@@ -71,8 +79,8 @@ class App(object):
     td {
         padding: 5px;
     }
-    table { 
-        border-spacing: 5px; 
+    table {
+        border-spacing: 5px;
         border: solid grey 1px;
         text-align: left;
     }
@@ -105,10 +113,15 @@ class App(object):
         flight_ids = self.cache_flights(flight_date)
 
         # Update flights, reuse connections 'cause 'tis faster
-        with getconn() as db:
+        db = getconn()
+        # with getconn() as db:
+        try:
             cur = db.cursor()
             for id in flight_ids:
                 cur.execute("UPDATE Flight SET date=date + interval %s WHERE id=%s", (interval, id))
+        finally:
+            db.commit()
+            putconn(db)
 
     # Удаляет планету с указанным идентификатором.
     # Пример: /delete_planet?planet_id=1
@@ -121,7 +134,9 @@ class App(object):
         try:
             cur.execute("DELETE FROM Planet WHERE id = %s", (planet_id,))
         finally:
-            db.close()
+            db.commit()
+            # db.close()
+            putconn(db)
 
 
 if __name__ == '__main__':
