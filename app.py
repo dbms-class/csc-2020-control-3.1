@@ -159,8 +159,8 @@ class App(object):
         # зачем помимо получения id еще кэшировать полеты?
 
         db = getconn()
-        cur = db.cursor()
         try:
+            cur = db.cursor()
             cur.execute("SELECT id FROM Flight WHERE date = DATE({flight_date})")
             flight_ids = [row[0] for row in cur.fetchall()]
             # получим flight_ids так
