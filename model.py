@@ -2,7 +2,7 @@
 # В этом файле реализованы Data Access Objects в виде классов Peewee ORM
 from peewee import *
 
-from connect import getconn
+from connect import connection_factory
 from connect import LoggingDatabase
 from args import *
 
@@ -59,9 +59,10 @@ class TicketEntity(Model):
 
     # Устанавливает размер скидки на билет
     def set_discount(self, discount):
-        with getconn() as db:
+        with connection_factory.conn() as db:
             cur = db.cursor()
             cur.execute("UPDATE FlightTicket SET discount=%s WHERE id=%s", (discount, self.id))
+            db.commit()
 
 
 class BookingEntity(Model):

@@ -1,7 +1,9 @@
 -- Справочник политических строев
+DROP TABLE IF EXISTS Government CASCADE;
 CREATE TABLE Government(id SERIAL PRIMARY KEY, value TEXT UNIQUE);
 
 -- Планета, её название, расстояние до Земли, политический строй
+DROP TABLE IF EXISTS Planet CASCADE;
 CREATE TABLE Planet(
   id SERIAL PRIMARY KEY,
   name TEXT UNIQUE,
@@ -9,15 +11,18 @@ CREATE TABLE Planet(
   government_id INT REFERENCES Government);
 
 -- Значения рейтинга пилотов
+DROP TYPE IF EXISTS Rating CASCADE;
 CREATE TYPE Rating AS ENUM('Harmless', 'Poor', 'Average', 'Competent', 'Dangerous', 'Deadly', 'Elite');
 
 -- Пилот корабля
+DROP TABLE IF EXISTS Commander CASCADE;
 CREATE TABLE Commander(
   id SERIAL PRIMARY KEY,
   name TEXT UNIQUE,
   rating Rating);
 
 -- Космический корабль, вместимость пассажиров и класс корабля
+DROP TABLE IF EXISTS Spacecraft CASCADE;
 CREATE TABLE Spacecraft(
   id SERIAL PRIMARY KEY,
   capacity INT CHECK(capacity > 0),
@@ -25,6 +30,7 @@ CREATE TABLE Spacecraft(
   class INT CHECK(class BETWEEN 1 AND 3));
 
 -- Полет на планету в означеную дату, выполняемый кораблем, пилотируемый капитаном
+DROP TABLE IF EXISTS Flight CASCADE;
 CREATE TABLE Flight(id INT PRIMARY KEY,
   spacecraft_id INT REFERENCES Spacecraft,
   commander_id INT REFERENCES Commander,
@@ -33,6 +39,7 @@ CREATE TABLE Flight(id INT PRIMARY KEY,
 );
 
 -- Стоимость полета до планеты по означенному классу обслуживания
+DROP TABLE IF EXISTS Price CASCADE;
 CREATE TABLE Price(
   id INT PRIMARY KEY,
   planet_id INT REFERENCES Planet ON DELETE CASCADE,
@@ -43,6 +50,7 @@ CREATE TABLE Price(
 
 -- Билет на полёт по указанному тарифу с некоторой скидкой (или наценкой)
 -- атрибут discount является множителем для цены.
+DROP TABLE IF EXISTS FlightTicket CASCADE;
 CREATE TABLE FlightTicket(
   id INT PRIMARY KEY,
   flight_id INT REFERENCES Flight ON DELETE CASCADE ,
@@ -51,15 +59,18 @@ CREATE TABLE FlightTicket(
 );
 
 -- Раса пассажира
+DROP TYPE IF EXISTS Race CASCADE;
 CREATE TYPE Race AS ENUM('Elves', 'Men', 'Trolls');
 
 -- Пассажир
+DROP TABLE IF EXISTS Pax CASCADE;
 CREATE TABLE Pax(
   id INT PRIMARY KEY,
   name TEXT,
   race Race);
 
 -- Резервирование места на полет
+DROP TABLE IF EXISTS Booking CASCADE;
 CREATE TABLE Booking(
   ref_num TEXT PRIMARY KEY,
   pax_id INT REFERENCES Pax,
@@ -88,7 +99,7 @@ FROM Flight F JOIN FlightAvailableSeatsView S ON F.id = S.flight_id;
 -- При увеличении factor количество записей пропорционально увеличивается
 
 
-CREATE OR REPLACE FUNCTION GenerateData(factor INT) RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION GenerateData(factor FLOAT) RETURNS VOID AS $$
 BEGIN
 -- ================================
 -- Перечисление государственных устройств
@@ -167,7 +178,7 @@ WITH MaxValues AS (
   (SELECT MAX(id) FROM Planet) AS planet
 ),
 Flights AS (
-  SELECT generate_series(1, 500*factor) AS id
+  SELECT generate_series(1, (500*factor)::INT) AS id
 )
 INSERT INTO Flight(id, spacecraft_id, commander_id, planet_id, date)
 SELECT id, (0.5 + random()*spacecraft)::INT,
@@ -191,7 +202,7 @@ JOIN Price P USING(planet_id, fare_code);
 -- ================================
 -- Случайные пассажиры
 WITH Paxes AS(
-  SELECT generate_series(1, 50*factor) AS id
+  SELECT generate_series(1, (50*factor)::INT) AS id
 ), Races AS (
   select enumsortorder AS race_num, enumlabel::Race AS race_value
   from pg_catalog.pg_enum
@@ -220,4 +231,4 @@ FROM Bookings CROSS JOIN MaxValues;
 END;
 $$ LANGUAGE plpgsql;
 
-SELECT GenerateData(1);
+SELECT GenerateData(0.01);
