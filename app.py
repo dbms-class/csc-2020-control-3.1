@@ -4,12 +4,12 @@ from typing import List, Dict
 
 ## Веб сервер
 import cherrypy
-from connect import getconn
+from connect import getconn, pg_pool
 from model import *
 
 @cherrypy.expose
 class App(object):
-    flight_cache = ...  # type: Dict[int, FlightEntity]
+    # flight_cache = dict()  # type: Dict[int, FlightEntity]
 
     def __init__(self):
         self.flight_cache = dict()
@@ -31,17 +31,22 @@ class App(object):
         flight_ids = []  # type: List[int]
 
         # Just get all needed flight identifiers
-        with getconn() as db:
+        db = getconn()
+        try:
             cur = db.cursor()
             if flight_date is None:
                 cur.execute("SELECT id FROM Flight")
             else:
                 cur.execute("SELECT id FROM Flight WHERE date = %s", (flight_date,))
             flight_ids = [row[0] for row in cur.fetchall()]
+        finally:
+            pg_pool.putconn(db)
 
         # Now let's check if we have some cached data, this will speed up performance, kek
         # Voila, now let's make sure all the flights we need are cached to boost performance.
         # Stupid database...
+
+        # Слишком много запросов на базу данных, каждый раз делается маленький запрос с join
         for flight_id in flight_ids:
             if not flight_id in self.flight_cache:
                 # OMG, cache miss! Let's fetch data
@@ -105,10 +110,14 @@ class App(object):
         flight_ids = self.cache_flights(flight_date)
 
         # Update flights, reuse connections 'cause 'tis faster
-        with getconn() as db:
+        db = getconn()
+        try:
             cur = db.cursor()
             for id in flight_ids:
                 cur.execute("UPDATE Flight SET date=date + interval %s WHERE id=%s", (interval, id))
+            db.commit()
+        finally:
+            pg_pool.putconn(db)
 
     # Удаляет планету с указанным идентификатором.
     # Пример: /delete_planet?planet_id=1
@@ -117,11 +126,12 @@ class App(object):
         if planet_id is None:
             return "Please specify planet_id, like this: /delete_planet?planet_id=1"
         db = getconn()
-        cur = db.cursor()
         try:
+            cur = db.cursor()
             cur.execute("DELETE FROM Planet WHERE id = %s", (planet_id,))
+            db.commit()
         finally:
-            db.close()
+            pg_pool.putconn(db)
 
 
 if __name__ == '__main__':
