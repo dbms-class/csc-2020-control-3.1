@@ -9,7 +9,7 @@ from model import *
 
 @cherrypy.expose
 class App(object):
-    flight_cache = ...  # type: Dict[int, FlightEntity]
+    flight_cache = {}
 
     def __init__(self):
         self.flight_cache = dict()
@@ -55,9 +55,6 @@ class App(object):
 
 
     def get_flights_ids_only(self, flight_date): # возвращает только id
-        flight_ids = []  # type: List[int]
-
-        # Just get all needed flight identifiers
         db = getconn()
         try:
             cur = db.cursor()
