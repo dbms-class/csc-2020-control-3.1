@@ -39,16 +39,20 @@ class App(object):
                 cur.execute("SELECT id FROM Flight WHERE date = %s", (flight_date,))
             flight_ids = [row[0] for row in cur.fetchall()]
 
+        flights = FlightEntity.select().join(PlanetEntity).where(FlightEntity.date == flight_date)
+        for flight in flights:
+            self.flight_cache[flight.id] = flight
+
         # Now let's check if we have some cached data, this will speed up performance, kek
         # Voila, now let's make sure all the flights we need are cached to boost performance.
         # Stupid database...
-        for flight_id in flight_ids:
-            if not flight_id in self.flight_cache:
-                # OMG, cache miss! Let's fetch data
-                flight = FlightEntity.select().join(PlanetEntity).where(FlightEntity.id == flight_id).get()
-                if flight is not None:
-                    self.flight_cache[flight_id] = flight
-        return flight_ids
+        # for flight_id in flight_ids:
+        #     if not flight_id in self.flight_cache:
+        #         # OMG, cache miss! Let's fetch data
+        #         flight = FlightEntity.select().join(PlanetEntity).where(FlightEntity.id == flight_id).get()
+        #         if flight is not None:
+        #             self.flight_cache[flight_id] = flight
+        return flights
 
     # Отображает таблицу с полетами в указанную дату или со всеми полетами,
     # если дата не указана
@@ -107,8 +111,7 @@ class App(object):
         # Update flights, reuse connections 'cause 'tis faster
         with getconn() as db:
             cur = db.cursor()
-            for id in flight_ids:
-                cur.execute("UPDATE Flight SET date=date + interval %s WHERE id=%s", (interval, id))
+            cur.execute("UPDATE Flight SET date=date + interval %s WHERE date=%s", (interval, flight_date))
 
     # Удаляет планету с указанным идентификатором.
     # Пример: /delete_planet?planet_id=1
