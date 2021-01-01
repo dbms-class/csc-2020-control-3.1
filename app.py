@@ -120,6 +120,7 @@ class App(object):
         cur = db.cursor()
         try:
             cur.execute("DELETE FROM Planet WHERE id = %s", (planet_id,))
+            db.commit()
         finally:
             db.close()
 
