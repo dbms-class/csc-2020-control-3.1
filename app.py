@@ -28,26 +28,24 @@ class App(object):
         </html>"""
 
     def cache_flights(self, flight_date):
-        flight_ids = []  # type: List[int]
-
         # Just get all needed flight identifiers
+        flight_ids = []
         with getconn() as db:
             cur = db.cursor()
             if flight_date is None:
                 cur.execute("SELECT id FROM Flight")
             else:
-                cur.execute("SELECT id FROM Flight WHERE date = %s", (flight_date,))
+                cur.execute("SELECT id FROM Flight WHERE date = %(flight_date)s", {'flight_date':flight_date})
             flight_ids = [row[0] for row in cur.fetchall()]
-
         # Now let's check if we have some cached data, this will speed up performance, kek
         # Voila, now let's make sure all the flights we need are cached to boost performance.
         # Stupid database...
+        #f = FlightEntity.select().join(PlanetEntity).where(FlightEntity.id == f
+        f = FlightEntity.select().join(PlanetEntity).where(FlightEntity.id << flight_ids)
         for flight_id in flight_ids:
-            if not flight_id in self.flight_cache:
-                # OMG, cache miss! Let's fetch data
-                flight = FlightEntity.select().join(PlanetEntity).where(FlightEntity.id == flight_id).get()
-                if flight is not None:
-                    self.flight_cache[flight_id] = flight
+            if flight_id not in self.flight_cache:
+                self.flight_cache[flight_id] = f.where(FlightEntity.id == flight_id).get()
+
         return flight_ids
 
     # Отображает таблицу с полетами в указанную дату или со всеми полетами,
@@ -108,8 +106,11 @@ class App(object):
         with getconn() as db:
             cur = db.cursor()
             for id in flight_ids:
-                cur.execute("UPDATE Flight SET date=date + interval %s WHERE id=%s", (interval, id))
-
+                cur.execute("UPDATE Flight SET date=date + interval %(interval)s WHERE id=%(id)s", {
+            'interval': interval, 
+            'id': id
+        })
+            db.commit()
     # Удаляет планету с указанным идентификатором.
     # Пример: /delete_planet?planet_id=1
     @cherrypy.expose
@@ -118,8 +119,12 @@ class App(object):
             return "Please specify planet_id, like this: /delete_planet?planet_id=1"
         db = getconn()
         cur = db.cursor()
+        if cur.execute('SELECT * FROM Planet where id = %(planet_id)s', {'planet_id':planet_id}).fetchall() == []:
+            db.close()
+            return
         try:
-            cur.execute("DELETE FROM Planet WHERE id = %s", (planet_id,))
+            cur.execute("DELETE FROM Planet WHERE id = %(planet_id)s", {'planet_id':planet_id}) # no commit changes
+            db.commit()
         finally:
             db.close()
 
